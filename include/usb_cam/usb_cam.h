@@ -158,6 +158,10 @@ class UsbCam {
   struct SwsContext *video_sws_;
   camera_image_t *image_;
 
+
+  void checkVideoStandard();
+  void listSupportedVideoStandards();
+  void selectVideoStandard();
 };
 
 }

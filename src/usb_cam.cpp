@@ -1195,6 +1195,8 @@ void UsbCam::start(const std::string& dev, io_method io_method,
 
   open_device();
   init_device(image_width, image_height, framerate);
+  // checkVideoStandard();
+  listSupportedVideoStandards();
   start_capturing();
 
   image_ = (camera_image_t *)calloc(1, sizeof(camera_image_t));
@@ -1418,4 +1420,112 @@ UsbCam::color_format UsbCam::color_format_from_string(const std::string& str)
       return COLOR_FORMAT_UNKNOWN;
 }
 
+void UsbCam::checkVideoStandard() {
+  v4l2_std_id std_id;
+  struct v4l2_standard standard;
+
+  if (-1 == ioctl (fd_, VIDIOC_G_STD, &std_id)) {
+  /* Note when VIDIOC_ENUMSTD always returns EINVAL this
+     is no video device or it falls under the USB exception,
+     and VIDIOC_G_STD returning EINVAL is no error. */
+
+    perror ("VIDIOC_G_STD");
+    // exit (EXIT_FAILURE);
+  }
+
+  memset (&standard, 0, sizeof (standard));
+  standard.index = 0;
+
+  while (0 == ioctl (fd_, VIDIOC_ENUMSTD, &standard)) {
+    if (standard.id & std_id) {
+     printf ("Current video standard: %s\n", standard.name);
+     exit (EXIT_SUCCESS);
+   }
+
+   standard.index++;
+ }
+
+/* EINVAL indicates the end of the enumeration, which cannot be
+   empty unless this device falls under the USB exception. */
+
+ if (errno == EINVAL || standard.index == 0) {
+  perror ("VIDIOC_ENUMSTD");
+  // exit (EXIT_FAILURE);
 }
+}
+
+void UsbCam::listSupportedVideoStandards() {
+  struct v4l2_input input;
+  struct v4l2_standard standard;
+
+  memset (&input, 0, sizeof (input));
+
+  if (-1 == ioctl (fd_, VIDIOC_G_INPUT, &input.index)) {
+    perror ("VIDIOC_G_INPUT");
+    // exit (EXIT_FAILURE);
+  }
+
+  if (-1 == ioctl (fd_, VIDIOC_ENUMINPUT, &input)) {
+    perror ("VIDIOC_ENUM_INPUT");
+    // exit (EXIT_FAILURE);
+  }
+
+  printf ("Current input %s supports:\n", input.name);
+
+  memset (&standard, 0, sizeof (standard));
+  standard.index = 0;
+
+  while (0 == ioctl (fd_, VIDIOC_ENUMSTD, &standard)) {
+    if (standard.id & input.std)
+      printf ("%s\n", standard.name);
+
+    standard.index++;
+  }
+
+/* EINVAL indicates the end of the enumeration, which cannot be
+   empty unless this device falls under the USB exception. */
+
+  if (errno != EINVAL || standard.index == 0) {
+    perror ("VIDIOC_ENUMSTD");
+    // exit (EXIT_FAILURE);
+  }
+}
+
+void UsbCam::selectVideoStandard() {
+  struct v4l2_input input;
+  v4l2_std_id std_id;
+
+  memset (&input, 0, sizeof (input));
+
+  if (-1 == ioctl (fd_, VIDIOC_G_INPUT, &input.index)) {
+    perror ("VIDIOC_G_INPUT");
+    exit (EXIT_FAILURE);
+  }
+
+  if (-1 == ioctl (fd_, VIDIOC_ENUMINPUT, &input)) {
+    perror ("VIDIOC_ENUM_INPUT");
+    exit (EXIT_FAILURE);
+  }
+
+  if (0 == (input.std & V4L2_STD_PAL_BG)) {
+    fprintf (stderr, "Oops. B/G PAL is not supported.\n");
+    exit (EXIT_FAILURE);
+  }
+
+/* Note this is also supposed to work when only B
+   or G/PAL is supported. */
+
+  std_id = V4L2_STD_PAL_BG;
+
+  if (-1 == ioctl (fd_, VIDIOC_S_STD, &std_id)) {
+    perror ("VIDIOC_S_STD");
+    exit (EXIT_FAILURE);
+  }
+  
+}
+
+}//namespace
+
+
+
+
